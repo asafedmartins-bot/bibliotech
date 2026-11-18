@@ -439,24 +439,73 @@ formLogin.addEventListener('submit', async (e) => {
   const password = loginSenhaInput.value
   const manterConectado = loginLembrar.checked
 
-  // Tenta autenticar pelo Supabase Auth
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  if (!email || !password) {
+    return mostrarToast('Por favor, informe seu e-mail e senha.', 'erro')
+  }
 
-  // Se falhar no Auth (ex: alunos falsos gerados pelo SQL), checa perfil direto na tabela usuarios
-  const { data: usuario, error: errUser } = await supabase
-    .from('usuarios')
-    .select('*')
-    .eq('email', email)
-    .single()
+  // 1. Tenta autenticar pelo Supabase Auth (para usuários reais cadastrados)
+  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
-  if (errUser || !usuario) {
+  let usuarioLogado = null
+
+  if (!authError && authData?.user) {
+    // Autenticação oficial no Supabase Auth foi um sucesso!
+    const { data: usuario, error: errUser } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('email', email)
+      .single()
+
+    if (errUser || !usuario) {
+      return mostrarToast('Perfil de usuário não encontrado no sistema.', 'erro')
+    }
+    usuarioLogado = usuario
+  } else {
+    // 2. Se falhou no Auth, checa se é uma conta demo/admin gerada pelo script SQL
+    const { data: usuarioDb } = await supabase
+      .from('usuarios')
+      .select('*')
+      .eq('email', email)
+      .single()
+
+    if (!usuarioDb) {
+      return mostrarToast('E-mail ou senha incorretos.', 'erro')
+    }
+
+    // Validação estrita para contas demo/SQL:
+    // - Administrador: aceita apenas 'admin123' ou '123456'
+    // - Alunos do ranking: aceita apenas '123456'
+    const ehAdmin = usuarioDb.tipo === 'admin'
+    const senhaValidaDemo = ehAdmin 
+      ? (password === 'admin123' || password === '123456')
+      : (password === '123456')
+
+    if (senhaValidaDemo) {
+      // Tenta registrar no Supabase Auth para oficializar a senha
+      const { error: signUpError } = await supabase.auth.signUp({ email, password })
+      
+      // Se der 'User already registered', significa que a conta já foi criada com outra senha no Auth,
+      // logo a senha digitada está incorreta!
+      if (signUpError && signUpError.message.toLowerCase().includes('already registered')) {
+        return mostrarToast('E-mail ou senha incorretos.', 'erro')
+      }
+
+      usuarioLogado = usuarioDb
+    } else {
+      // SENHA INCORRETA! Bloqueia o acesso imediatamente!
+      return mostrarToast('E-mail ou senha incorretos.', 'erro')
+    }
+  }
+
+  if (!usuarioLogado) {
     return mostrarToast('E-mail ou senha incorretos.', 'erro')
   }
 
+  // Persistência de sessão (se manter conectado estiver ativo)
   if (manterConectado) {
     localStorage.setItem('bibliotech_lembrar', 'true')
     localStorage.setItem('bibliotech_email', email)
-    localStorage.setItem('bibliotech_usuario', JSON.stringify(usuario))
+    localStorage.setItem('bibliotech_usuario', JSON.stringify(usuarioLogado))
     document.documentElement.classList.add('usuario-lembrado')
   } else {
     localStorage.removeItem('bibliotech_lembrar')
@@ -465,8 +514,8 @@ formLogin.addEventListener('submit', async (e) => {
     document.documentElement.classList.remove('usuario-lembrado')
   }
 
-  mostrarToast(`Boas-vindas, ${usuario.nome}!`)
-  iniciarSessao(usuario)
+  mostrarToast(`Boas-vindas, ${usuarioLogado.nome}!`)
+  iniciarSessao(usuarioLogado)
 })
 
 // ==========================================
