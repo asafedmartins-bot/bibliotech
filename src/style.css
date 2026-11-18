@@ -1,0 +1,24 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: #faf8f5;
+  color: #171614;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  scroll-behavior: smooth;
+}
+/* Scrollbar refinada */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f0ece2;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8d3c5;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c29b38;
+}
