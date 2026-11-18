@@ -461,7 +461,9 @@ formLogin.addEventListener('submit', async (e) => {
     }
     usuarioLogado = usuario
   } else {
-    // 2. Se falhou no Auth, checa se é uma conta demo/admin gerada pelo script SQL
+    // 2. Se falhou no Auth, pode ser:
+    // A) Uma senha incorreta de um usuário que já existe
+    // B) Ou uma conta demo/admin gerada direto pelo script SQL (ainda não sincronizada no Auth)
     const { data: usuarioDb } = await supabase
       .from('usuarios')
       .select('*')
@@ -473,8 +475,8 @@ formLogin.addEventListener('submit', async (e) => {
     }
 
     // Validação estrita para contas demo/SQL:
-    // - Administrador: aceita apenas 'admin123' ou '123456'
-    // - Alunos do ranking: aceita apenas '123456'
+    // - Administrador: aceita 'admin123' ou '123456'
+    // - Alunos do ranking: aceita '123456'
     const ehAdmin = usuarioDb.tipo === 'admin'
     const senhaValidaDemo = ehAdmin 
       ? (password === 'admin123' || password === '123456')
@@ -484,8 +486,8 @@ formLogin.addEventListener('submit', async (e) => {
       // Tenta registrar no Supabase Auth para oficializar a senha
       const { error: signUpError } = await supabase.auth.signUp({ email, password })
       
-      // Se der 'User already registered', significa que a conta já foi criada com outra senha no Auth,
-      // logo a senha digitada está incorreta!
+      // Se der erro de 'User already registered', significa que a conta já tinha sido criada no Auth com OUTRA senha,
+      // logo a senha digitada agora está INCORRETA!
       if (signUpError && signUpError.message.toLowerCase().includes('already registered')) {
         return mostrarToast('E-mail ou senha incorretos.', 'erro')
       }
