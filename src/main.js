@@ -268,6 +268,7 @@ async function verificarSessaoInicial() {
   // Se não estiver logado, garante que a tela de login fique visível
   document.documentElement.classList.remove('usuario-lembrado')
   secaoAuth.style.display = 'block'
+  if (window.lucide) window.lucide.createIcons()
 }
 
 function iniciarSessao(usuario) {
@@ -330,16 +331,16 @@ function configurarVisaoAdmin() {
 
 function ativarAba(nomeAba) {
   const abas = [
-    { btn: navAbaCatalogo, sec: secaoCatalogo },
-    { btn: navAbaMeusLivros, sec: secaoMeusLivros },
-    { btn: navAbaAdminCatalogo, sec: secaoAdminCadastro },
-    { btn: navAbaAdminSolicitacoes, sec: secaoAdminSolicitacoes },
-    { btn: navAbaRanking, sec: secaoRanking }
+    { id: 'catalogo', btn: navAbaCatalogo, sec: secaoCatalogo },
+    { id: 'meus-livros', btn: navAbaMeusLivros, sec: secaoMeusLivros },
+    { id: 'admin-catalogo', btn: navAbaAdminCatalogo, sec: secaoAdminCadastro },
+    { id: 'admin-solicitacoes', btn: navAbaAdminSolicitacoes, sec: secaoAdminSolicitacoes },
+    { id: 'ranking', btn: navAbaRanking, sec: secaoRanking }
   ]
 
   abas.forEach(item => {
     if (!item.btn || !item.sec) return
-    const isAtiva = item.btn.id.includes(nomeAba)
+    const isAtiva = item.id === nomeAba
     item.sec.style.display = isAtiva ? 'block' : 'none'
 
     if (isAtiva) {
@@ -349,7 +350,13 @@ function ativarAba(nomeAba) {
     }
   })
 
-  if (nomeAba === 'admin-catalogo') {
+  // Trava de segurança: Se NÃO for administrador, NUNCA exibe telas de admin!
+  if (!perfilAtual || perfilAtual.tipo !== 'admin') {
+    if (secaoAdminCadastro) secaoAdminCadastro.style.display = 'none'
+    if (secaoAdminSolicitacoes) secaoAdminSolicitacoes.style.display = 'none'
+  }
+
+  if (nomeAba === 'admin-catalogo' && perfilAtual && perfilAtual.tipo === 'admin') {
     secaoCatalogo.style.display = 'block'
   }
 
@@ -378,6 +385,7 @@ tabLogin.addEventListener('click', () => {
   tabCadastro.className = 'flex-1 py-2.5 rounded-xl text-zinc-500 hover:text-ink transition-all'
   formLogin.style.display = 'block'
   formCadastro.style.display = 'none'
+  if (window.lucide) window.lucide.createIcons()
 })
 
 tabCadastro.addEventListener('click', () => {
@@ -385,6 +393,7 @@ tabCadastro.addEventListener('click', () => {
   tabLogin.className = 'flex-1 py-2.5 rounded-xl text-zinc-500 hover:text-ink transition-all'
   formCadastro.style.display = 'block'
   formLogin.style.display = 'none'
+  if (window.lucide) window.lucide.createIcons()
 })
 
 // ==========================================
@@ -905,7 +914,18 @@ async function carregarMeusLivros() {
                 </button>
               `}
             </div>
-          ` : ''
+          ` : `
+            <div class="pt-3 border-t border-[#f4f0e6] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span class="text-xs text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 flex items-center gap-1.5">
+                <i data-lucide="info" class="w-3.5 h-3.5 text-amber-600 flex-shrink-0"></i>
+                Vá até a biblioteca para retirar seu exemplar.
+              </span>
+              <button class="btn-cancelar-reserva px-3.5 py-2 text-xs font-bold rounded-xl border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 transition-all flex items-center justify-center gap-1.5 shadow-xs" data-id="${item.id}" data-livro-id="${item.livro_id}" data-titulo="${item.livro_titulo}">
+                <i data-lucide="x-circle" class="w-3.5 h-3.5 text-red-500"></i>
+                Cancelar Reserva
+              </button>
+            </div>
+          `
         }
       `
 
@@ -927,6 +947,36 @@ async function carregarMeusLivros() {
               await supabase.from('emprestimos').update({ solicitacao_renovacao: true }).eq('id', item.id)
               mostrarToast('Solicitação de renovação enviada para o bibliotecário!')
               carregarMeusLivros()
+            }
+          )
+        })
+      }
+
+      // Cancelar Reserva (devolve o exemplar ao estoque e libera o aluno)
+      const btnCancelar = card.querySelector('.btn-cancelar-reserva')
+      if (btnCancelar) {
+        btnCancelar.addEventListener('click', () => {
+          abrirModalConfirmacao(
+            'Cancelar Reserva',
+            `Deseja realmente cancelar a reserva da obra "${item.livro_titulo}"? O exemplar voltará a ficar disponível no acervo para outros alunos.`,
+            async () => {
+              // 1. Remove o empréstimo pendente
+              const { error: errDel } = await supabase.from('emprestimos').delete().eq('id', item.id)
+              if (errDel) {
+                return mostrarToast('Erro ao cancelar reserva: ' + errDel.message, 'erro')
+              }
+
+              // 2. Repõe o exemplar no estoque do livro
+              if (item.livro_id) {
+                const { data: livro } = await supabase.from('livros').select('quantidade_disponivel').eq('id', item.livro_id).single()
+                if (livro) {
+                  await supabase.from('livros').update({ quantidade_disponivel: livro.quantidade_disponivel + 1 }).eq('id', item.livro_id)
+                }
+              }
+
+              mostrarToast('Reserva cancelada com sucesso! O exemplar voltou à estante.')
+              carregarMeusLivros()
+              carregarLivros()
             }
           )
         })
@@ -1129,23 +1179,52 @@ async function carregarRanking() {
   if (window.lucide) window.lucide.createIcons()
 }
 
-async function atualizarPosicaoAlunoNoRanking(meusLidos) {
+async function atualizarPosicaoAlunoNoRanking() {
+  if (!perfilAtual || !perfilAtual.email) return
+
+  // 1. Buscar todos os empréstimos devolvidos
   const { data: emprestimosDevolvidos } = await supabase
     .from('emprestimos')
     .select('aluno_email')
     .eq('status', 'devolvido')
 
-  if (!emprestimosDevolvidos) return
+  // 2. Buscar todos os alunos cadastrados
+  const { data: alunosCadastrados } = await supabase
+    .from('usuarios')
+    .select('email')
+    .eq('tipo', 'aluno')
 
   const contagem = {}
-  emprestimosDevolvidos.forEach(emp => {
+  ;(emprestimosDevolvidos || []).forEach(emp => {
     const email = emp.aluno_email ? emp.aluno_email.toLowerCase() : ''
     if (email) contagem[email] = (contagem[email] || 0) + 1
   })
 
-  const scores = Object.values(contagem).sort((a, b) => b - a)
-  const pos = scores.indexOf(meusLidos) + 1
-  statPosicaoRanking.innerText = pos > 0 ? `#${pos}` : '#—'
+  const todosEmails = new Set()
+  ;(alunosCadastrados || []).forEach(a => {
+    if (a.email) todosEmails.add(a.email.toLowerCase())
+  })
+  Object.keys(contagem).forEach(e => todosEmails.add(e.toLowerCase()))
+  if (perfilAtual.email) todosEmails.add(perfilAtual.email.toLowerCase())
+
+  // Monta a lista completa com a pontuação de cada aluno
+  const ranking = Array.from(todosEmails).map(email => ({
+    email,
+    pontos: contagem[email] || 0
+  }))
+
+  // Ordena por maior quantidade de livros lidos
+  ranking.sort((a, b) => b.pontos - a.pontos)
+
+  // Encontra a posição do aluno logado no ranking escolar
+  const emailAtual = perfilAtual.email.toLowerCase()
+  const index = ranking.findIndex(r => r.email === emailAtual)
+
+  if (index !== -1) {
+    statPosicaoRanking.innerText = `#${index + 1}º`
+  } else {
+    statPosicaoRanking.innerText = `#${ranking.length}º`
+  }
 }
 
 // ==========================================
@@ -1352,3 +1431,7 @@ formLivro.addEventListener('submit', async (e) => {
 // 🚀 INICIALIZAÇÃO
 // ==========================================
 verificarSessaoInicial()
+if (window.lucide) window.lucide.createIcons()
+window.addEventListener('load', () => {
+  if (window.lucide) window.lucide.createIcons()
+})

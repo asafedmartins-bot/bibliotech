@@ -89,7 +89,10 @@
       <div class="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
         <div class="flex items-center gap-3.5">
           <div class="w-11 h-11 rounded-2xl bg-ink text-[#faf8f5] flex items-center justify-center shadow-md border border-zinc-700">
-            <i data-lucide="book-marked" class="w-5 h-5 text-brass"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#c29b38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-brass">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path>
+              <path d="M10 2v8l3-2 3 2V2"></path>
+            </svg>
           </div>
           <div>
             <span class="text-[10px] tracking-[0.25em] uppercase font-bold text-brass block">Biblioteca Escolar</span>
@@ -243,7 +246,7 @@
                 Coleção Escolar Ativa
               </span>
               <h2 class="font-serif text-3xl md:text-5xl font-bold text-ink tracking-tight leading-tight">
-                Uma vez senhores, sempre senhores.
+                O saber guardado para o seu amanhã.
               </h2>
               <p class="text-sm text-zinc-600 font-medium leading-relaxed">
                 Consulte as obras disponíveis nas estantes da escola e reserve seu exemplar com facilidade.
@@ -592,6 +595,16 @@
       </div>
     </footer>
 
+    <script>
+      // Garante a renderização imediata de todos os ícones Lucide da página
+      if (window.lucide) window.lucide.createIcons();
+      window.addEventListener('DOMContentLoaded', () => {
+        if (window.lucide) window.lucide.createIcons();
+      });
+      window.addEventListener('load', () => {
+        if (window.lucide) window.lucide.createIcons();
+      });
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
